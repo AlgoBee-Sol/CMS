@@ -1,0 +1,99 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: clinicms-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: dbpass123
+      POSTGRES_DB: clinicms
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d clinicms"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - clinic_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: clinicms-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - clinic_net
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: clinicms-server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      BACKEND_PORT: "4000"
+      DATABASE_URL: "postgresql://postgres:dbpass123@postgres:5432/clinicms?schema=public"
+      REDIS_URL: "redis://redis:6379"
+    ports:
+      - "4000:4000"
+    networks:
+      - clinic_net
+
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+    container_name: clinicms-admin
+    restart: unless-stopped
+    networks:
+      - clinic_net
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    container_name: clinicms-client
+    restart: unless-stopped
+    networks:
+      - clinic_net
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: clinicms-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8080:8080"
+    depends_on:
+      - admin
+      - client
+      - server
+    networks:
+      - clinic_net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  clinic_net:
+    driver: bridge

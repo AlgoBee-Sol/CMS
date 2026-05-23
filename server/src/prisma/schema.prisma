@@ -1,0 +1,429 @@
+// This is Prisma schema file
+
+// =============================================================================
+// Prisma Schema — Physiotherapy Clinic Management System
+// Database: PostgreSQL
+// =============================================================================
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =============================================================================
+// ENUMS
+// =============================================================================
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  ENDED
+}
+
+enum PlanType {
+  MONTHLY
+  ANNUAL
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  OTHER
+}
+
+enum StaffRole {
+  OWNER
+  DOCTOR
+  RECEPTION
+}
+
+enum StaffStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum AppointmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum SessionStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum TreatmentType {
+  ELECTROTHERAPY
+  MANUAL_THERAPY
+  HEAT_THERAPY
+  ACUPUNCTURE
+  GYM_EXERCISES
+  STRETCHING
+  CHIROPRACTIC
+  OTHER
+}
+
+// =============================================================================
+// SUPER ADMIN
+// =============================================================================
+
+model SuperAdmin {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String // bcrypt-hashed
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Audit relations
+  deletedClinics   Clinic[]          @relation("ClinicDeletedBy")
+  deletedOwners    Staff[]           @relation("StaffDeletedBy")
+  recordedPayments PlatformPayment[]
+
+  @@map("super_admins")
+}
+
+// =============================================================================
+// CLINIC (TENANT)
+// =============================================================================
+
+model Clinic {
+  id                 String  @id @default(cuid())
+  name               String
+  code               String  @unique // 3-5 chars, lowercase, e.g. "tmj"
+  subdomain          String  @unique // auto-set from code, read-only after creation
+  email              String
+  phone              String
+  address            String
+  logoUrl            String?
+  termsAndConditions String? // rich text
+
+  isActive       Boolean     @default(true)
+  isDeleted      Boolean     @default(false)
+  deletedAt      DateTime?
+  deletedBy      String? // FK → SuperAdmin.id
+  deletedByAdmin SuperAdmin? @relation("ClinicDeletedBy", fields: [deletedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  subscriptions    Subscription[]
+  staff            Staff[]
+  patients         Patient[]
+  sessions         Session[]
+  appointments     Appointment[]
+  platformPayments PlatformPayment[]
+
+  @@index([isDeleted])
+  @@index([code])
+  @@map("clinics")
+}
+
+// =============================================================================
+// SUBSCRIPTION (SEPARATE ENTITY — FULL HISTORY PRESERVED)
+// =============================================================================
+
+model Subscription {
+  id       String @id @default(cuid())
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  status            SubscriptionStatus
+  planType          PlanType
+  amountPaid        Decimal            @db.Decimal(10, 2)
+  startDate         DateTime           @db.Date
+  endDate           DateTime           @db.Date
+  trialDurationDays Int? // configurable per clinic at creation
+
+  paymentMethod PaymentMethod
+  accountOrRef  String? // bank account or transaction reference
+  notes         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([clinicId])
+  @@index([status])
+  @@index([endDate])
+  @@map("subscriptions")
+}
+
+// =============================================================================
+// PLATFORM PAYMENT (SUPER ADMIN REVENUE LEDGER)
+// =============================================================================
+
+model PlatformPayment {
+  id       String @id @default(cuid())
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  amountPaid    Decimal       @db.Decimal(10, 2)
+  paymentDate   DateTime      @db.Date
+  paymentMethod PaymentMethod
+  accountOrRef  String?
+  notes         String?
+
+  recordedById String
+  recordedBy   SuperAdmin @relation(fields: [recordedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([clinicId])
+  @@index([paymentDate])
+  @@map("platform_payments")
+}
+
+// =============================================================================
+// STAFF (OWNER + DOCTOR + RECEPTION — UNIFIED TABLE WITH DISCRIMINATOR)
+// =============================================================================
+
+model Staff {
+  id       String @id @default(cuid())
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  fullName     String
+  email        String
+  phone        String?
+  role         StaffRole
+  staffCode    String      @unique // e.g. TMJ-ADM-001, TMJ-DTR-002, TMJ-RCP-003
+  passwordHash String // bcrypt
+  status       StaffStatus @default(ACTIVE)
+
+  // PII
+  cnic String? // encrypted at rest
+
+  isDeleted      Boolean     @default(false)
+  deletedAt      DateTime?
+  deletedBy      String? // FK → SuperAdmin.id
+  deletedByAdmin SuperAdmin? @relation("StaffDeletedBy", fields: [deletedBy], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations (as doctor)
+  assignedPatients     Patient[]     @relation("PatientDoctor")
+  sessions             Session[]     @relation("SessionDoctor")
+  appointments         Appointment[] @relation("AppointmentDoctor")
+  approvedAppointments Appointment[] @relation("AppointmentApprovedBy")
+
+  // Consultation notes authored by this doctor
+  consultationNotes ConsultationNote[]
+
+  @@unique([clinicId, email])
+  @@index([clinicId, role])
+  @@index([staffCode])
+  @@index([isDeleted])
+  @@map("staff")
+}
+
+// =============================================================================
+// PATIENT
+// =============================================================================
+
+model Patient {
+  id       String @id @default(cuid())
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  fullName     String
+  email        String
+  passwordHash String // bcrypt — set via welcome email
+  phone        String?
+  address      String?
+  dateOfBirth  DateTime? @db.Date
+  age          Int?
+
+  staffCode String  @unique // e.g. TMJ-PAT-001
+  cnic      String? // encrypted at rest
+
+  assignedDoctorId String?
+  assignedDoctor   Staff?  @relation("PatientDoctor", fields: [assignedDoctorId], references: [id])
+
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  sessions          Session[]
+  appointments      Appointment[]
+  consultationNotes ConsultationNote[]
+  treatmentPlan     TreatmentPlan?
+
+  @@unique([clinicId, email])
+  @@index([clinicId])
+  @@index([staffCode])
+  @@index([isDeleted])
+  @@map("patients")
+}
+
+// =============================================================================
+// CONSULTATION NOTE (FIRST-TIME / INTAKE NOTE BY DOCTOR)
+// =============================================================================
+
+model ConsultationNote {
+  id        String  @id @default(cuid())
+  clinicId  String
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+  doctorId  String
+  doctor    Staff   @relation(fields: [doctorId], references: [id])
+
+  chiefComplaint String
+  diagnosis      String?
+  notes          String? // rich text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([patientId])
+  @@index([doctorId])
+  @@map("consultation_notes")
+}
+
+// =============================================================================
+// TREATMENT PLAN (SESSION TRACKING — RECOMMENDED / DONE / REMAINING)
+// =============================================================================
+
+model TreatmentPlan {
+  id        String  @id @default(cuid())
+  patientId String  @unique
+  patient   Patient @relation(fields: [patientId], references: [id])
+  clinicId  String
+
+  recommendedSessions Int @default(0)
+  // doneSessions and remainingSessions are computed from Session records
+  // but stored here for fast dashboard reads and can be kept in sync via triggers/service layer
+
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clinicId])
+  @@map("treatment_plans")
+}
+
+// =============================================================================
+// SESSION (MOST IMPORTANT MODULE)
+// =============================================================================
+
+model Session {
+  id       String @id @default(cuid())
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  doctorId String
+  doctor   Staff  @relation("SessionDoctor", fields: [doctorId], references: [id])
+
+  // Linked appointment (optional — walk-in sessions may not have one)
+  appointmentId String?
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id])
+
+  date         DateTime
+  durationMins Int
+
+  treatmentTypes TreatmentType[] // multi-value stored as Postgres array
+
+  clinicalNotes String? // rich text
+
+  // Payment
+  amountPaid    Decimal?       @db.Decimal(10, 2)
+  paymentMethod PaymentMethod?
+  paymentRef    String?
+
+  status SessionStatus @default(SCHEDULED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([doctorId])
+  @@index([status])
+  @@index([date])
+  @@map("sessions")
+}
+
+// =============================================================================
+// APPOINTMENT (SECOND MOST IMPORTANT MODULE)
+// =============================================================================
+
+model Appointment {
+  id       String @id @default(cuid())
+  clinicId String
+  clinic   Clinic @relation(fields: [clinicId], references: [id])
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  requestedDate DateTime  @db.Date
+  preferredTime DateTime? @db.Time
+
+  doctorId String?
+  doctor   Staff?  @relation("AppointmentDoctor", fields: [doctorId], references: [id])
+
+  status         AppointmentStatus @default(PENDING)
+  chiefComplaint String?
+
+  approvedById    String?
+  approvedBy      Staff?    @relation("AppointmentApprovedBy", fields: [approvedById], references: [id])
+  approvedAt      DateTime?
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions Session[]
+
+  @@index([clinicId])
+  @@index([patientId])
+  @@index([status])
+  @@index([requestedDate])
+  @@map("appointments")
+}
+
+// =============================================================================
+// STAFF CODE SEQUENCE (SCOPED PER CLINIC + ROLE FOR AUTO-INCREMENT)
+// =============================================================================
+
+model StaffCodeSequence {
+  id       String @id @default(cuid())
+  clinicId String
+  role     String // "ADM" | "DTR" | "RCP" | "PAT"
+  lastSeq  Int    @default(0)
+
+  @@unique([clinicId, role])
+  @@map("staff_code_sequences")
+}
+
+// =============================================================================
+// REFRESH TOKEN (AUTH)
+// =============================================================================
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String // staff or patient id
+  userType  String // "staff" | "patient" | "superAdmin"
+  clinicId  String? // null for super admin
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}

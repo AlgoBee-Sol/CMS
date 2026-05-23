@@ -1,0 +1,37 @@
+{
+  "name": "clinicms",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack Clinic Management System",
+  "author": "Zafar Rizvi",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n SERVER,ADMIN,CLIENT -c blue,green,yellow \"npm run dev:server\" \"npm run dev:admin\" \"npm run dev:client\"",
+    "dev:server": "npm --prefix server run dev",
+    "dev:admin": "npm --prefix admin run dev",
+    "dev:client": "npm --prefix client run dev",
+    "start": "npm --prefix server start",
+    "install:all": "npm install && npm --prefix server install && npm --prefix admin install && npm --prefix client install",
+    "build": "npm --prefix admin run build && npm --prefix client run build",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "docker:clean": "docker compose down -v"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  },
+  "keywords": [
+    "clinic-management-system",
+    "mern",
+    "fullstack",
+    "healthcare",
+    "react",
+    "nodejs"
+  ]
+}
