@@ -46,4 +46,11 @@ router.delete("/:id", asyncHandler(clinicController.deleteClinic));
 // Restore clinic
 router.post("/:id/restore", asyncHandler(clinicController.restoreClinic));
 
+// Clinic owner management
+router.get("/:id/owner", asyncHandler(clinicController.getClinicOwner));
+router.patch("/:id/owner", asyncHandler(clinicController.updateClinicOwner));
+
+// Clinic subscription management
+router.patch("/:id/subscription", asyncHandler(clinicController.updateClinicSubscription));
+
 export default router;

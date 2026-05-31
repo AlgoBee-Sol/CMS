@@ -14,6 +14,7 @@ import appointmentsRoutes from "./modules/appointments/appointments.routes.js";
 import patientsRoutes from "./modules/patients/patients.routes.js";
 import clinicRoutes from "./modules/owner/clinic.routes.js";
 import financialsRoutes from "./modules/reports/financials.routes.js";
+import adminPatientsRoutes from "./modules/patients/adminPatients.routes.js";
 
 // Import middleware
 import { tenantIsolation } from "./middlewares/tenantIsolation.middleware.js";
@@ -66,6 +67,7 @@ app.use("/api/patients", patientsRoutes);
 // Super Admin routes
 app.use("/api/admin/clinics", clinicRoutes);
 app.use("/api/admin/financials", financialsRoutes);
+app.use("/api/admin/patients", adminPatientsRoutes);
 
 // ============================================================================
 // 404 Handler

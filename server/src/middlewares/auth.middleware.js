@@ -29,8 +29,9 @@ export function authenticate(req, res, next) {
     req.user = {
       userId: payload.userId,
       clinicId: payload.clinicId || null,
-      role: payload.role || null,
+      role: payload.role || (payload.userType === "superAdmin" ? "superAdmin" : null),
       userType: payload.userType, // "staff" | "patient" | "superAdmin"
+      superAdminId: payload.userType === "superAdmin" ? payload.userId : null,
     };
 
     next();

@@ -28,3 +28,14 @@ export const recordPaymentSchema = z.object({
     description: z.string().optional(),
   }),
 });
+
+export const getPaymentsSchema = z.object({
+  query: z.object({
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    clinicId: z.string().optional(),
+    paymentMethod: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+  }),
+});

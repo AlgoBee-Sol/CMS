@@ -27,3 +27,13 @@ export const updatePatientSchema = z.object({
     cnic: z.string().optional(),
   }),
 });
+
+export const getPatientsAdminSchema = z.object({
+  query: z.object({
+    page: z.string().optional(),
+    limit: z.string().optional(),
+    search: z.string().optional(),
+    clinicId: z.string().optional(),
+    cnic: z.string().optional(),
+  }),
+});

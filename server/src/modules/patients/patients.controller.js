@@ -295,3 +295,160 @@ export async function getPatientStats(req, res) {
     },
   });
 }
+
+/**
+ * Get all patients globally (Super Admin directory)
+ */
+export async function getPatientsAdmin(req, res) {
+  const { page = "1", limit = "25", search, clinicId, cnic } = req.query;
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const pageSize = Math.max(1, Math.min(100, parseInt(limit, 10) || 25));
+  const skip = (pageNum - 1) * pageSize;
+
+  const where = {
+    role: "patient",
+  };
+
+  if (clinicId) {
+    where.clinicId = clinicId;
+  }
+
+  if (search) {
+    where.OR = [
+      { firstName: { contains: search, mode: "insensitive" } },
+      { lastName: { contains: search, mode: "insensitive" } },
+      { email: { contains: search, mode: "insensitive" } },
+      { phone: { contains: search, mode: "insensitive" } },
+    ];
+  }
+
+  if (cnic) {
+    // If CNIC is queried, because encryption is non-deterministic (random IV),
+    // we must fetch and filter in-memory.
+    const allPatients = await prisma.user.findMany({
+      where,
+      include: {
+        clinic: { select: { name: true } },
+        patientSessions: {
+          take: 1,
+          orderBy: { sessionDate: "desc" },
+          include: {
+            doctor: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const decrypted = allPatients.map((p) => {
+      let decryptedCnic = null;
+      try {
+        decryptedCnic = p.cnic ? decrypt(p.cnic) : null;
+      } catch (err) {
+        // Ignore
+      }
+      return {
+        ...p,
+        cnic: decryptedCnic,
+      };
+    });
+
+    const filtered = decrypted.filter((p) => {
+      if (!p.cnic) return false;
+      const cleanCnic = p.cnic.replace(/[^0-9a-zA-Z]/g, "");
+      const cleanQuery = cnic.replace(/[^0-9a-zA-Z]/g, "");
+      return cleanCnic.includes(cleanQuery);
+    });
+
+    const total = filtered.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const paginated = filtered.slice(skip, skip + pageSize);
+
+    const formatted = paginated.map((p) => {
+      const latestSession = p.patientSessions[0];
+      const doc = latestSession?.doctor;
+      return {
+        id: p.id,
+        email: p.email,
+        firstName: p.firstName,
+        lastName: p.lastName,
+        phone: p.phone,
+        cnic: p.cnic,
+        createdAt: p.createdAt,
+        clinicName: p.clinic?.name || "Unknown",
+        assignedDoctor: doc ? `${doc.firstName} ${doc.lastName}` : "Unassigned",
+      };
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        patients: formatted,
+        pagination: {
+          page: pageNum,
+          limit: pageSize,
+          total,
+          totalPages,
+        },
+      },
+    });
+  }
+
+  const [patients, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      include: {
+        clinic: { select: { name: true } },
+        patientSessions: {
+          take: 1,
+          orderBy: { sessionDate: "desc" },
+          include: {
+            doctor: { select: { firstName: true, lastName: true } },
+          },
+        },
+      },
+      skip,
+      take: pageSize,
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  const totalPages = Math.ceil(total / pageSize);
+
+  const formatted = patients.map((p) => {
+    let decryptedCnic = null;
+    try {
+      decryptedCnic = p.cnic ? decrypt(p.cnic) : null;
+    } catch (err) {
+      // Ignore
+    }
+    const latestSession = p.patientSessions[0];
+    const doc = latestSession?.doctor;
+    return {
+      id: p.id,
+      email: p.email,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      phone: p.phone,
+      cnic: decryptedCnic,
+      createdAt: p.createdAt,
+      clinicName: p.clinic?.name || "Unknown",
+      assignedDoctor: doc ? `${doc.firstName} ${doc.lastName}` : "Unassigned",
+    };
+  });
+
+  return res.json({
+    success: true,
+    data: {
+      patients: formatted,
+      pagination: {
+        page: pageNum,
+        limit: pageSize,
+        total,
+        totalPages,
+      },
+    },
+  });
+}

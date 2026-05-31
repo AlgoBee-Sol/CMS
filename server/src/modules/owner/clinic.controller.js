@@ -9,6 +9,7 @@ import {
   NotFoundError,
   ConflictError,
 } from "../../utils/errors.js";
+import { encrypt, decrypt } from "../../utils/encryption.util.js";
 
 /**
  * Create a new clinic
@@ -267,5 +268,130 @@ export async function restoreClinic(req, res) {
       message: "Clinic restored successfully",
       clinic: restored,
     },
+  });
+}
+
+/**
+ * Get clinic owner details
+ */
+export async function getClinicOwner(req, res) {
+  const { id } = req.params;
+
+  const owner = await prisma.user.findFirst({
+    where: { clinicId: id, role: "clinic_owner" },
+  });
+
+  if (!owner) {
+    throw new NotFoundError("Clinic owner not found");
+  }
+
+  let decryptedCnic = null;
+  if (owner.cnic) {
+    try {
+      decryptedCnic = decrypt(owner.cnic);
+    } catch (err) {
+      // Ignore
+    }
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      owner: {
+        ...owner,
+        cnic: decryptedCnic,
+        password: undefined,
+      },
+    },
+  });
+}
+
+/**
+ * Update clinic owner details
+ */
+export async function updateClinicOwner(req, res) {
+  const { id } = req.params;
+  const { firstName, lastName, email, phone, cnic } = req.body;
+
+  const owner = await prisma.user.findFirst({
+    where: { clinicId: id, role: "clinic_owner" },
+  });
+
+  if (!owner) {
+    throw new NotFoundError("Clinic owner not found");
+  }
+
+  const updateData = {};
+  if (firstName) updateData.firstName = firstName;
+  if (lastName) updateData.lastName = lastName;
+  if (email) updateData.email = email;
+  if (phone !== undefined) updateData.phone = phone;
+  if (cnic !== undefined) {
+    updateData.cnic = cnic ? encrypt(cnic) : null;
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: owner.id },
+    data: updateData,
+  });
+
+  let decryptedCnic = null;
+  if (updated.cnic) {
+    try {
+      decryptedCnic = decrypt(updated.cnic);
+    } catch (err) {
+      // Ignore
+    }
+  }
+
+  return res.json({
+    success: true,
+    data: {
+      owner: {
+        ...updated,
+        cnic: decryptedCnic,
+        password: undefined,
+      },
+    },
+  });
+}
+
+/**
+ * Update or create clinic subscription details
+ */
+export async function updateClinicSubscription(req, res) {
+  const { id } = req.params;
+  const { status, planType, amount, startDate, endDate, autoRenew } = req.body;
+
+  const clinic = await prisma.clinic.findUnique({ where: { id } });
+  if (!clinic) {
+    throw new NotFoundError("Clinic not found");
+  }
+
+  const updateData = {};
+  if (status) updateData.status = status;
+  if (planType) updateData.planType = planType;
+  if (amount !== undefined) updateData.amount = parseFloat(amount) || 0;
+  if (startDate) updateData.startDate = new Date(startDate);
+  if (endDate) updateData.endDate = new Date(endDate);
+  if (autoRenew !== undefined) updateData.autoRenew = autoRenew === true;
+
+  const subscription = await prisma.subscription.upsert({
+    where: { clinicId: id },
+    update: updateData,
+    create: {
+      clinicId: id,
+      status: status || "Active",
+      planType: planType || "Basic",
+      amount: parseFloat(amount) || 0,
+      startDate: startDate ? new Date(startDate) : new Date(),
+      endDate: endDate ? new Date(endDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      autoRenew: autoRenew !== undefined ? autoRenew === true : true,
+    },
+  });
+
+  return res.json({
+    success: true,
+    data: { subscription },
   });
 }

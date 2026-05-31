@@ -320,3 +320,69 @@ export async function getDashboardSummary(req, res) {
     },
   });
 }
+
+/**
+ * Get all platform payments (global payment history)
+ * Super Admin endpoint with filtering and pagination
+ */
+export async function getPayments(req, res) {
+  const { page = "1", limit = "20", clinicId, paymentMethod, startDate, endDate } = req.query;
+
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const pageSize = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
+  const skip = (pageNum - 1) * pageSize;
+
+  const where = {};
+
+  if (clinicId) {
+    where.clinicId = clinicId;
+  }
+
+  if (paymentMethod) {
+    where.paymentMethod = paymentMethod;
+  }
+
+  if (startDate || endDate) {
+    where.paymentDate = {};
+    if (startDate) {
+      where.paymentDate.gte = new Date(startDate);
+    }
+    if (endDate) {
+      // Set to end of the day if it's just a date string
+      const end = new Date(endDate);
+      if (!endDate.includes("T")) {
+        end.setHours(23, 59, 59, 999);
+      }
+      where.paymentDate.lte = end;
+    }
+  }
+
+  const [payments, total] = await Promise.all([
+    prisma.platformPayment.findMany({
+      where,
+      include: {
+        clinic: { select: { id: true, name: true, code: true } },
+        loggedBySuperAdmin: { select: { id: true, name: true, email: true } },
+      },
+      skip,
+      take: pageSize,
+      orderBy: { paymentDate: "desc" },
+    }),
+    prisma.platformPayment.count({ where }),
+  ]);
+
+  const totalPages = Math.ceil(total / pageSize);
+
+  return res.json({
+    success: true,
+    data: {
+      payments,
+      pagination: {
+        page: pageNum,
+        limit: pageSize,
+        total,
+        totalPages,
+      },
+    },
+  });
+}

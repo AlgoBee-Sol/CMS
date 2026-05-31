@@ -56,4 +56,11 @@ router.post(
   asyncHandler(financialsController.recordPayment),
 );
 
+// Get all platform payments (global payment history)
+router.get(
+  "/payments",
+  validateRequest(financialsSchema.getPaymentsSchema),
+  asyncHandler(financialsController.getPayments),
+);
+
 export default router;

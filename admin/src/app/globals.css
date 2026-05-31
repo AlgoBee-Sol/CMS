@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+:root {
+  /* Primary — deep professional blue */
+  --color-primary-50:  #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-200: #bfdbfe;
+  --color-primary-300: #93c5fd;
+  --color-primary-400: #60a5fa;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;   /* main CTA */
+  --color-primary-700: #1d4ed8;
+  --color-primary-800: #1e40af;
+  --color-primary-900: #1e3a8a;   /* dark headings */
+
+  /* Neutrals */
+  --color-neutral-50:  #f8fafc;   /* page background */
+  --color-neutral-100: #f1f5f9;   /* card background */
+  --color-neutral-200: #e2e8f0;   /* borders */
+  --color-neutral-300: #cbd5e1;
+  --color-neutral-400: #94a3b8;   /* muted text */
+  --color-neutral-600: #475569;   /* secondary text */
+  --color-neutral-900: #0f172a;   /* primary text */
+
+  /* Semantic */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger:  #dc2626;
+  --color-info:    #0284c7;
+
+  /* Surface */
+  --color-surface:        #ffffff;
+  --color-surface-raised: #f8fafc;
+
+  /* Sidebar */
+  --sidebar-bg:           #0f172a;   /* near-black navy */
+  --sidebar-text:         #cbd5e1;
+  --sidebar-text-active:  #ffffff;
+  --sidebar-accent:       #2563eb;
+  --sidebar-width:        256px;
+
+  /* Global background/foreground compatibility */
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+@theme {
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-text: var(--sidebar-text);
+  --color-sidebar-text-active: var(--sidebar-text-active);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --font-sans: 'Plus Jakarta Sans', var(--font-geist-sans), sans-serif;
+  --font-mono: 'JetBrains Mono', var(--font-geist-mono), monospace;
+}
+
+body {
+  background-color: var(--color-neutral-50);
+  color: var(--color-neutral-900);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-neutral-50);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-neutral-300);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neutral-400);
+}
+
+/* Micro-animations */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-shimmer {
+  background: linear-gradient(90deg, var(--color-neutral-100) 25%, var(--color-neutral-200) 50%, var(--color-neutral-100) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Layout Utilities */
+.page-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+.card-base {
+  background-color: var(--color-surface);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--color-neutral-200);
+}
