@@ -1,0 +1,235 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+// ============================================================================
+// SUPER ADMIN & PLATFORM ENTITIES
+// ============================================================================
+
+model SuperAdmin {
+    id        String   @id @default(cuid())
+    email     String   @unique
+    password  String // bcrypt hashed
+    name      String
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    payments       PlatformPayment[]
+    deletedClinics Clinic[]
+
+    @@map("super_admins")
+}
+
+model PlatformPayment {
+    id                   String   @id @default(cuid())
+    clinicId             String
+    amount               Float
+    paymentDate          DateTime @default(now())
+    paymentMethod        String // "Bank Transfer", "Cash", etc.
+    description          String?
+    loggedBySuperAdminId String
+    createdAt            DateTime @default(now())
+    updatedAt            DateTime @updatedAt
+
+    // Relations
+    clinic             Clinic     @relation(fields: [clinicId], references: [id])
+    loggedBySuperAdmin SuperAdmin @relation(fields: [loggedBySuperAdminId], references: [id])
+
+    @@index([clinicId])
+    @@index([loggedBySuperAdminId])
+    @@map("platform_payments")
+}
+
+// ============================================================================
+// CLINIC (TENANT) ENTITIES
+// ============================================================================
+
+model Clinic {
+    id                 String    @id @default(cuid())
+    code               String    @unique // 3-5 chars: e.g., "TMJ"
+    name               String
+    subdomain          String    @unique
+    logoUrl            String?
+    address            String?
+    email              String
+    phone              String
+    termsAndConditions String?
+    isDeleted          Boolean   @default(false)
+    deletedAt          DateTime?
+    deletedBy          String?
+    createdAt          DateTime  @default(now())
+    updatedAt          DateTime  @updatedAt
+
+    // Relations
+    users        User[]
+    subscription Subscription?
+    payments     PlatformPayment[]
+    appointments Appointment[]
+    sessions     Session[]
+    superAdmin   SuperAdmin?       @relation(fields: [deletedBy], references: [id])
+
+    @@index([code])
+    @@index([subdomain])
+    @@index([isDeleted])
+    @@map("clinics")
+}
+
+model Subscription {
+    id        String   @id @default(cuid())
+    clinicId  String   @unique
+    status    String   @default("Trial") // "Active", "Trial", "Ended"
+    planType  String // "Basic", "Professional", "Enterprise"
+    amount    Float
+    startDate DateTime
+    endDate   DateTime
+    autoRenew Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+    @@index([clinicId])
+    @@index([status])
+    @@map("subscriptions")
+}
+
+// ============================================================================
+// USER ENTITIES (STAFF & PATIENTS)
+// ============================================================================
+
+model User {
+    id        String   @id @default(cuid())
+    clinicId  String
+    email     String
+    password  String // bcrypt hashed
+    firstName String
+    lastName  String
+    phone     String?
+    cnic      String? // encrypted at rest (Node crypto AES-256)
+    role      String // "clinic_owner", "reception", "doctor", "patient"
+    staffCode String? // Format: "TMJ-ADM-001", null for patients
+    isActive  Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    clinic               Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+    patientAppointments  Appointment[]    @relation("patient")
+    approvedAppointments Appointment[]    @relation("approver")
+    doctorSessions       Session[]        @relation("doctor")
+    patientSessions      Session[]        @relation("patient")
+    sessionPayments      SessionPayment[]
+
+    @@unique([clinicId, email])
+    @@unique([clinicId, staffCode])
+    @@index([clinicId])
+    @@index([role])
+    @@index([staffCode])
+    @@map("users")
+}
+
+// ============================================================================
+// APPOINTMENT ENTITIES
+// ============================================================================
+
+model Appointment {
+    id              String   @id @default(cuid())
+    clinicId        String
+    patientId       String
+    requestedDate   DateTime
+    preferredTime   String // e.g., "09:00", "14:30"
+    status          String   @default("Pending") // "Pending", "Approved", "Rejected", "Completed", "Cancelled"
+    chiefComplaint  String
+    rejectionReason String?
+    approvedBy      String? // User ID of the reception/clinic owner who approved
+    notes           String?
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    // Relations
+    clinic   Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+    patient  User   @relation("patient", fields: [patientId], references: [id], onDelete: Cascade)
+    approver User?  @relation("approver", fields: [approvedBy], references: [id])
+
+    @@index([clinicId])
+    @@index([patientId])
+    @@index([status])
+    @@index([requestedDate])
+    @@map("appointments")
+}
+
+// ============================================================================
+// SESSION ENTITIES (CORE CLINICAL MODULE)
+// ============================================================================
+
+model Session {
+    id              String   @id @default(cuid())
+    clinicId        String
+    patientId       String
+    doctorId        String
+    sessionDate     DateTime
+    sessionTime     String // e.g., "10:00"
+    treatmentTypes  String[] // JSON array stored as text: ["consultation", "follow-up"]
+    durationMinutes Int // Session duration
+    clinicalNotes   String?
+    status          String   @default("Pending") // "Pending", "Completed", "Cancelled"
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    // Relations
+    clinic   Clinic           @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+    patient  User             @relation("patient", fields: [patientId], references: [id], onDelete: Cascade)
+    doctor   User             @relation("doctor", fields: [doctorId], references: [id], onDelete: Cascade)
+    payments SessionPayment[]
+
+    @@index([clinicId])
+    @@index([patientId])
+    @@index([doctorId])
+    @@index([sessionDate])
+    @@index([status])
+    @@map("sessions")
+}
+
+model SessionPayment {
+    id            String   @id @default(cuid())
+    sessionId     String
+    userId        String // Patient ID
+    amountPaid    Float
+    paymentMethod String // "Cash", "Card", "Bank Transfer"
+    paymentDate   DateTime @default(now())
+    notes         String?
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    // Relations
+    session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@index([sessionId])
+    @@index([userId])
+    @@map("session_payments")
+}
+
+model SessionStats {
+    id             String   @id @default(cuid())
+    clinicId       String
+    patientId      String
+    completedCount Int      @default(0) // "Done" sessions
+    remainingCount Int      @default(0) // Remaining sessions in plan
+    totalPlanned   Int      @default(0)
+    lastUpdated    DateTime @default(now())
+
+    @@unique([clinicId, patientId])
+    @@index([clinicId])
+    @@index([patientId])
+    @@map("session_stats")
+}
