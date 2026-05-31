@@ -1,7 +1,6 @@
-import { env } from "./src/config/env.config";
 import { defineConfig } from "prisma/config";
 
-const databaseUrl = env.DATABASE_URL;
+const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   throw new Error(
     "DATABASE_URL environment variable is required but was not set.",

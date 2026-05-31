@@ -51,6 +51,9 @@ services:
       BACKEND_PORT: "4000"
       DATABASE_URL: "postgresql://postgres:dbpass123@postgres:5432/clinicms?schema=public"
       REDIS_URL: "redis://redis:6379"
+      JWT_ACCESS_SECRET: "4e110c6f18392291feaf8d5a15c96c5cb192cd99b1fd4f99415544f7c75084bf"
+      JWT_REFRESH_SECRET: "089cf6c7516c7adff02ac7de8ef026917512c0607c02ad32adc5606014217eee"
+      ENCRYPTION_KEY: "16715ad78b2b8760acf47de03990f21f96eda9cf5cd1c6f82c9bd0f274ae2912"
     ports:
       - "4000:4000"
     networks:
