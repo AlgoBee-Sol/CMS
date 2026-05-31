@@ -1,12 +1,12 @@
 import { z } from "zod";
 
 export const subscriptionSchema = z.object({
-  status: z.enum(["Active", "Trial"]),
+  status: z.enum(["Active", "Trial", "Ended"]),
   planType: z.string().min(1, "Plan type is required"),
   amount: z.number().min(0, "Amount must be 0 or more"),
   startDate: z.string().min(1, "Start date is required"),
   endDate: z.string().min(1, "End date is required"),
-  autoRenew: z.boolean().default(true),
+  autoRenew: z.boolean(),
 });
 
 export const paymentSchema = z.object({

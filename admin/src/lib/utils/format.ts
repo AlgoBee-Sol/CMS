@@ -79,6 +79,14 @@ export function generateClinicCode(name: string): string {
   return words.map((w) => w[0]).join("").slice(0, 5);
 }
 
+/** Format CNIC as user types: XXXXX-XXXXXXX-X */
+export function formatCnicInput(value: string): string {
+  const digits = value.replace(/\D/g, "").slice(0, 13);
+  if (digits.length <= 5) return digits;
+  if (digits.length <= 12) return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+  return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
+}
+
 /** Auto-generate a subdomain from a clinic name */
 export function generateSubdomain(name: string): string {
   return name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30);
